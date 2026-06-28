@@ -194,17 +194,6 @@ def _assign_text_positions(x_arr: np.ndarray, y_arr: np.ndarray) -> list[str]:
     return positions
 
 
-# ════════════════════════════════════════════════════════════════
-# ЭКСПОРТ В PNG (требует kaleido)
-# ════════════════════════════════════════════════════════════════
-
-def _fig_to_png(fig: go.Figure) -> bytes | None:
-    """Конвертирует Plotly-фигуру в PNG. Возвращает None если kaleido не установлен."""
-    try:
-        return fig.to_image(format="png", width=1600, height=800, scale=2)
-    except Exception:
-        return None
-
 
 # ════════════════════════════════════════════════════════════════
 # ════════════════════════════════════════════════════════════════
@@ -570,20 +559,6 @@ fig.update_layout(
 
 # ════════════════════════════════════════════════════════════════
 # КНОПКА ЭКСПОРТА PNG + ОТОБРАЖЕНИЕ ГРАФИКА
-# ════════════════════════════════════════════════════════════════
-_btn_col, _ = st.columns([2, 5])
-_png = _fig_to_png(fig)
-with _btn_col:
-    if _png:
-        st.download_button(
-            "⬇ Скачать график (PNG)",
-            data=_png,
-            file_name=f"yield_map_{updated}.png",
-            mime="image/png",
-        )
-    else:
-        st.caption("_PNG: установите `pip install kaleido`_")
-
 st.plotly_chart(fig, use_container_width=True)
 
 
