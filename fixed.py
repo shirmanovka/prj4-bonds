@@ -460,7 +460,7 @@ fig.add_trace(go.Scatter(
     name="Облигационные выпуски",
     text=_labels,
     textposition=_tp if show_labels else None,
-    textfont=dict(family=FONT_FAMILY, size=8, color="black"),
+    textfont=dict(family=FONT_FAMILY, size=12, color="black"),
     marker=dict(
         color=COLOR_BONDS,
         size=marker_size,
@@ -501,7 +501,7 @@ if st.session_state.custom_points:
         name="Мои точки",
         text=_cp["name"],
         textposition="top center",
-        textfont=dict(family=FONT_FAMILY, size=10, color=COLOR_CUSTOM),
+        textfont=dict(family=FONT_FAMILY, size=13, color=COLOR_CUSTOM),
         marker=dict(
             color=COLOR_CUSTOM,
             size=marker_size + 5,
@@ -526,20 +526,20 @@ fig.update_layout(
         xanchor="center",
     ),
     xaxis=dict(
-        title=dict(text="Дюрация (лет)", font=dict(family=FONT_FAMILY, size=13)),
-        tickfont=dict(family=FONT_FAMILY, size=11),
+        title=dict(text="Дюрация (лет)", font=dict(family=FONT_FAMILY, size=14)),
+        tickfont=dict(family=FONT_FAMILY, size=12),
         gridcolor="#eeeeee",
         zeroline=False,
     ),
     yaxis=dict(
-        title=dict(text="Доходность к погашению (%)", font=dict(family=FONT_FAMILY, size=13)),
-        tickfont=dict(family=FONT_FAMILY, size=11),
+        title=dict(text="Доходность к погашению (%)", font=dict(family=FONT_FAMILY, size=14)),
+        tickfont=dict(family=FONT_FAMILY, size=12),
         ticksuffix="%",
         gridcolor="#eeeeee",
         zeroline=False,
     ),
     legend=dict(
-        font=dict(family=FONT_FAMILY, size=11),
+        font=dict(family=FONT_FAMILY, size=12),
         bgcolor="rgba(255,255,255,0.85)",
         bordercolor="#cccccc",
         borderwidth=1,
