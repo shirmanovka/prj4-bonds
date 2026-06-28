@@ -113,7 +113,7 @@ def load_fixed() -> pd.DataFrame:
 
     df["issuer_type"] = df.apply(_classify, axis=1)
 
-    # Оферта: дата если есть, иначе тип (Колл/Пут), иначе "—"
+    # Оферта: только дата, если есть — иначе "—"
     def _offer(row: pd.Series) -> str:
         opt_type = str(row.get("option_type") or "")
         if opt_type in ("Отсутствует", "nan", ""):
@@ -121,9 +121,14 @@ def load_fixed() -> pd.DataFrame:
         opt_date = row.get("option_date")
         if pd.notna(opt_date):
             return pd.Timestamp(opt_date).strftime("%d.%m.%Y")
-        return opt_type  # Колл / Пут
+        return "—"
 
     df["has_option"] = df.apply(_offer, axis=1)
+
+    # Тип оферты: Колл / Пут / "—"
+    df["offer_type"] = df["option_type"].apply(
+        lambda x: x if str(x) not in ("Отсутствует", "nan", "") else "—"
+    )
 
     return df
 
@@ -602,12 +607,12 @@ _TABLE_COLS: dict[str, str] = {
     "duration":      "Дюрация",
     "coupon":        "Купон, %",
     "has_option":    "Оферта",
+    "offer_type":    "Тип оферты",
     "maturity":      "Погашение",
     "issue_date":    "Размещение",
     "isin":          "ISIN",
     "issuer":        "Эмитент",
     "sector":        "Сектор",
-    "option_type":   "Тип опциона",
     "issuer_type":   "Тип эмитента",
     "liquidity":     "Ликвидность",
 }
