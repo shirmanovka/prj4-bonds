@@ -564,9 +564,9 @@ st.plotly_chart(
         "toImageButtonOptions": {
             "format": "png",
             "filename": f"yield_map_{updated}",
-            "width": 2400,
-            "height": 1200,
-            "scale": 3,      # 3× физического размера → ~300 dpi
+            "width": 1600,
+            "height": 900,
+            "scale": 1,      # 1600×900 px — ~254 dpi на ширину A4, оптимально для Word
         },
         "displaylogo": False,
     },
