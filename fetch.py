@@ -117,6 +117,13 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     for col in num_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+    # option_date приходит с префиксом "К: 2026-12-20" или "П: 2026-12-08" —
+    # извлекаем только дату перед парсингом
+    if "option_date" in df.columns:
+        df["option_date"] = (
+            df["option_date"].astype(str)
+            .str.extract(r"(\d{4}-\d{2}-\d{2})")[0]
+        )
     date_cols = ["maturity", "issue_date", "next_coupon", "option_date"]
     for col in date_cols:
         if col in df.columns:
