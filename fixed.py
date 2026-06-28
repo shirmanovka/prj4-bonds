@@ -468,7 +468,7 @@ fig.add_trace(go.Scatter(
     x=fdf["duration"],
     y=fdf["yield_pct"],
     mode=_mode,
-    name="Фиксированный купон",
+    name="Облигационные выпуски",
     text=_labels,
     textposition=_tp if show_labels else None,
     textfont=dict(family=FONT_FAMILY, size=8, color="black"),
@@ -488,10 +488,7 @@ if show_gcurve:
     _x_hi = float(fdf["duration"].max()) if not fdf.empty else 15.0
     _gx, _gy, _is_synth = _build_gcurve(df_ofz, _x_lo, _x_hi)
 
-    _gcurve_name = (
-        "G-кривая (синтетич.)" if _is_synth
-        else f"G-кривая ОФЗ ({len(df_ofz)} вып.)"
-    )
+    _gcurve_name = f"G-Curve ({updated})"
     fig.add_trace(go.Scatter(
         x=_gx,
         y=_gy,
@@ -534,9 +531,10 @@ if st.session_state.custom_points:
 # ── Оформление графика (шрифт Calibri везде) ────────────────────
 fig.update_layout(
     title=dict(
-        text="Дюрация × Доходность к погашению",
+        text="Карта доходностей облигаций",
         font=dict(family=FONT_FAMILY, size=18),
-        x=0.0,
+        x=0.5,
+        xanchor="center",
     ),
     xaxis=dict(
         title=dict(text="Дюрация (лет)", font=dict(family=FONT_FAMILY, size=13)),
@@ -556,11 +554,11 @@ fig.update_layout(
         bgcolor="rgba(255,255,255,0.85)",
         bordercolor="#cccccc",
         borderwidth=1,
-        orientation="h",
-        yanchor="bottom",
-        y=1.01,
-        xanchor="left",
-        x=0.0,
+        orientation="v",
+        yanchor="top",
+        y=1.0,
+        xanchor="right",
+        x=1.0,
     ),
     hovermode="closest",
     template="plotly_white",
