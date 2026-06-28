@@ -49,6 +49,9 @@ def load_floaters() -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.read_csv(path)
     df["maturity"] = pd.to_datetime(df["maturity"], errors="coerce")
+    df["years_to_maturity"] = (
+        (df["maturity"] - pd.Timestamp.now()).dt.days / 365
+    ).clip(lower=0).round(2)
     df["rating_clean"] = df["rating"].str.split("/").str[0].str.strip()
     df["rating_clean"] = df["rating_clean"].str.extract(r"^([A-D][A-Z+\-]*)")
     df["color"] = df["rating_clean"].map(RATING_COLORS).fillna("#9e9e9e")
@@ -239,7 +242,7 @@ with tab2:
 # TAB 3 — ФЛОУТЕРЫ
 # ═══════════════════════════════════════════════
 with tab3:
-    st.subheader("Флоутеры (RUONIA + спред)")
+    st.subheader("Флоутеры (КС + спред)")
     if df_fl.empty:
         st.info("Файл data/floaters.csv не найден или пуст.")
     else:
@@ -248,28 +251,32 @@ with tab3:
         ffl = df_fl[df_fl["rating_clean"].isin(sel_fl_ratings)].copy()
 
         fig_fl = px.scatter(
-            ffl.dropna(subset=["duration", "spread_ruonia"]),
-            x="duration", y="spread_ruonia",
+            ffl.dropna(subset=["years_to_maturity", "spread_ks"]),
+            x="years_to_maturity", y="spread_ks",
             color="rating_clean",
             color_discrete_map=RATING_COLORS,
             size="volume", size_max=28,
             hover_name="ticker",
-            hover_data={"issuer": True, "rating": True, "coupon": True, "maturity": True},
-            labels={"duration": "Дюрация (лет)", "spread_ruonia": "Спред к RUONIA (б.п.)", "rating_clean": "Рейтинг"},
+            hover_data={"issuer": True, "rating": True, "yield_total": True, "maturity": True},
+            labels={
+                "years_to_maturity": "До погашения (лет)",
+                "spread_ks": "Спред к КС (б.п.)",
+                "rating_clean": "Рейтинг",
+            },
             category_orders={"rating_clean": RATING_ORDER},
             template="plotly_white", height=480,
         )
         st.plotly_chart(fig_fl, use_container_width=True)
 
         grp_fl = (
-            ffl.dropna(subset=["spread_ruonia", "rating_clean"])
+            ffl.dropna(subset=["spread_ks", "rating_clean"])
             .groupby("rating_clean")
-            .agg(выпусков=("isin", "count"), спред_медиана=("spread_ruonia", "median"))
+            .agg(выпусков=("isin", "count"), спред_медиана=("spread_ks", "median"))
             .reindex([r for r in RATING_ORDER if r in ffl["rating_clean"].unique()])
             .dropna(how="all").round(1)
         )
         grp_fl.index.name = "Рейтинг"
-        grp_fl.columns = ["Выпусков", "Спред к RUONIA медиана (б.п.)"]
+        grp_fl.columns = ["Выпусков", "Спред к КС медиана (б.п.)"]
         st.dataframe(grp_fl, use_container_width=True)
 
 
