@@ -252,15 +252,24 @@ with st.sidebar:
     sel_ratings: list[str] = st.multiselect(
         "Рейтинг",
         _avail_ratings,
-        default=_avail_ratings,
-        help="Кредитный рейтинг (AAA → D)",
+        default=[],
+        help="Кредитный рейтинг (AAA → D). Пусто = все рейтинги",
     )
 
     # ── Тип эмитента ────────────────────────────────────────────
     sel_issuer_types: list[str] = st.multiselect(
         "Тип эмитента",
         ISSUER_TYPES,
-        default=ISSUER_TYPES,
+        default=["Корпоративные"],
+    )
+
+    # ── Сектор ──────────────────────────────────────────────────
+    _avail_sectors = sorted(df_full["sector"].dropna().unique().tolist())
+    sel_sectors: list[str] = st.multiselect(
+        "Сектор",
+        _avail_sectors,
+        default=[],
+        help="Пусто = все секторы",
     )
 
     # ── Дюрация: двойной слайдер, шаг 0.1 ──────────────────────
@@ -291,7 +300,7 @@ with st.sidebar:
     # ── Подписи точек: чекбокс ──────────────────────────────────
     show_labels: bool = st.checkbox(
         "Показывать подписи (Тикер, Рейтинг)",
-        value=st.session_state.show_labels,
+        value=False,
         key="show_labels",
         help="Подпись у каждой точки: 'Тикер, Рейтинг'",
     )
@@ -374,6 +383,9 @@ if sel_ratings:
 if sel_issuer_types:
     mask &= df_full["issuer_type"].isin(sel_issuer_types)
 
+if sel_sectors:
+    mask &= df_full["sector"].isin(sel_sectors)
+
 mask &= df_full["duration"].between(sel_dur[0], sel_dur[1], inclusive="both")
 
 if sel_tickers:
@@ -443,7 +455,7 @@ _tp = _assign_text_positions(
 _labels: list[str] | None
 if show_labels:
     _labels = fdf.apply(
-        lambda r: f"{r['ticker']}<br><span style='font-size:7px'>{r['rating_clean']}</span>",
+        lambda r: f"{r['ticker']}, {r['rating_clean']}",
         axis=1,
     ).tolist()
     _mode = "markers+text"
@@ -459,7 +471,7 @@ fig.add_trace(go.Scatter(
     name="Фиксированный купон",
     text=_labels,
     textposition=_tp if show_labels else None,
-    textfont=dict(family=FONT_FAMILY, size=8, color="#5a0010"),
+    textfont=dict(family=FONT_FAMILY, size=8, color="black"),
     marker=dict(
         color=COLOR_BONDS,
         size=marker_size,
