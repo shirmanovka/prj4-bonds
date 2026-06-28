@@ -113,14 +113,16 @@ def load_fixed() -> pd.DataFrame:
 
     df["issuer_type"] = df.apply(_classify, axis=1)
 
-    # Оферта: только дата, если есть — иначе "—"
+    # Оферта: дата из option_date; если пусто — берём maturity (bondresearch
+    # хранит дату оферты в maturity для бумаг с Пут/Колл)
     def _offer(row: pd.Series) -> str:
         opt_type = str(row.get("option_type") or "")
         if opt_type in ("Отсутствует", "nan", ""):
             return "—"
-        opt_date = row.get("option_date")
-        if pd.notna(opt_date):
-            return pd.Timestamp(opt_date).strftime("%d.%m.%Y")
+        for date_col in ("option_date", "maturity"):
+            d = row.get(date_col)
+            if pd.notna(d):
+                return pd.Timestamp(d).strftime("%d.%m.%Y")
         return "—"
 
     df["has_option"] = df.apply(_offer, axis=1)
