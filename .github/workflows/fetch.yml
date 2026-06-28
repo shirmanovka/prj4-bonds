@@ -1,0 +1,33 @@
+name: Fetch bond data
+
+on:
+  schedule:
+    - cron: "0 4 * * 1-5"   # 07:00 МСК (UTC+3), пн-пт
+  workflow_dispatch:          # ручной запуск из GitHub UI
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests pandas
+
+      - name: Fetch data
+        run: python fetch.py
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/bonds.csv data/floaters.csv
+          git diff --cached --quiet || git commit -m "data: update bonds $(date +'%Y-%m-%d')"
+          git push
