@@ -89,7 +89,7 @@ def load_fixed() -> pd.DataFrame:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # Даты
-    for col in ["maturity", "issue_date"]:
+    for col in ["maturity", "issue_date", "option_date"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
@@ -113,10 +113,17 @@ def load_fixed() -> pd.DataFrame:
 
     df["issuer_type"] = df.apply(_classify, axis=1)
 
-    # Наличие опциона: текст для таблицы
-    df["has_option"] = df["option_type"].apply(
-        lambda x: "Да" if str(x) not in ("Отсутствует", "nan", "") else "Нет"
-    )
+    # Оферта: дата если есть, иначе тип (Колл/Пут), иначе "—"
+    def _offer(row: pd.Series) -> str:
+        opt_type = str(row.get("option_type") or "")
+        if opt_type in ("Отсутствует", "nan", ""):
+            return "—"
+        opt_date = row.get("option_date")
+        if pd.notna(opt_date):
+            return pd.Timestamp(opt_date).strftime("%d.%m.%Y")
+        return opt_type  # Колл / Пут
+
+    df["has_option"] = df.apply(_offer, axis=1)
 
     return df
 
@@ -594,7 +601,7 @@ _TABLE_COLS: dict[str, str] = {
     "current_yield": "Тек. дох-ть, %",
     "duration":      "Дюрация",
     "coupon":        "Купон, %",
-    "has_option":    "Опцион",
+    "has_option":    "Оферта",
     "maturity":      "Погашение",
     "issue_date":    "Размещение",
     "isin":          "ISIN",
