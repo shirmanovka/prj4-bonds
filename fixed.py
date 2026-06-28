@@ -460,7 +460,7 @@ fig.add_trace(go.Scatter(
     name="Облигационные выпуски",
     text=_labels,
     textposition=_tp if show_labels else None,
-    textfont=dict(family=FONT_FAMILY, size=12, color="black"),
+    textfont=dict(family=FONT_FAMILY, size=10, color="black"),
     marker=dict(
         color=COLOR_BONDS,
         size=marker_size,
