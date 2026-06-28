@@ -557,9 +557,20 @@ fig.update_layout(
 )
 
 
-# ════════════════════════════════════════════════════════════════
-# КНОПКА ЭКСПОРТА PNG + ОТОБРАЖЕНИЕ ГРАФИКА
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(
+    fig,
+    use_container_width=True,
+    config={
+        "toImageButtonOptions": {
+            "format": "png",
+            "filename": f"yield_map_{updated}",
+            "width": 2400,
+            "height": 1200,
+            "scale": 3,      # 3× физического размера → ~300 dpi
+        },
+        "displaylogo": False,
+    },
+)
 
 
 # ════════════════════════════════════════════════════════════════
