@@ -202,7 +202,7 @@ def _assign_text_positions(x_arr: np.ndarray, y_arr: np.ndarray) -> list[str]:
 # ════════════════════════════════════════════════════════════════
 
 st.title("📊 Фиксированный купон — Карта доходностей")
-st.caption("Источник: bondresearch.ru | Обновляется каждое утро (GitHub Actions / fetch.py)")
+st.caption("Данные обновляются каждое утро")
 
 # Загрузка данных
 df_full = load_fixed()
