@@ -253,29 +253,6 @@ def _assign_text_positions(x_arr: np.ndarray, y_arr: np.ndarray) -> list[str]:
 # Загрузка данных
 df_full = load_fixed()
 
-# ── Верхняя панель: принудительное обновление данных ─────────────
-_top_l, _top_r = st.columns([1, 4])
-with _top_l:
-    if st.button(
-        "🔄 Обновить данные",
-        use_container_width=True,
-        help="Принудительно загрузить свежие данные с bondresearch.ru",
-    ):
-        with st.spinner("Загружаю данные..."):
-            try:
-                _fetch.main()
-            except Exception as e:
-                st.error(f"Не удалось обновить данные: {e}")
-            else:
-                load_fixed.clear()
-                st.rerun()
-with _top_r:
-    st.markdown(
-        f"<div style='padding-top:0.6em'>Последнее обновление: "
-        f"<b>{_get_last_update_display(df_full)}</b></div>",
-        unsafe_allow_html=True,
-    )
-
 st.title("📊 Фиксированный купон — Карта доходностей")
 st.caption("Данные обновляются каждое утро")
 
@@ -294,6 +271,19 @@ df_ofz = df_full[df_full["issuer_type"] == "ОФЗ"].copy()
 # САЙДБАР: ФИЛЬТРЫ + НАСТРОЙКИ ГРАФИКА + КОНСТРУКТОР СДЕЛКИ
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
+    # ── Обновление данных ──────────────────────────────────────
+    if st.button("🔄 Обновить данные", use_container_width=True):
+        with st.spinner("Загружаю данные..."):
+            try:
+                _fetch.main()
+            except Exception as e:
+                st.error(f"Не удалось обновить данные: {e}")
+            else:
+                load_fixed.clear()
+                st.rerun()
+    st.caption(f"Обновлено: **{_get_last_update_display(df_full)}**")
+    st.divider()
+
     st.header("Фильтры")
     st.caption(f"Данные от **{updated}** | Всего: **{total_count}** выпусков")
     st.divider()
@@ -615,13 +605,13 @@ fig.update_layout(
         xanchor="center",
     ),
     xaxis=dict(
-        title=dict(text="<b>Дюрация (лет)</b>", font=dict(family=FONT_FAMILY, size=14)),
+        title=dict(text="<b>Дюрация, лет</b>", font=dict(family=FONT_FAMILY, size=14)),
         tickfont=dict(family=FONT_FAMILY, size=12),
         gridcolor="#eeeeee",
         zeroline=False,
     ),
     yaxis=dict(
-        title=dict(text="<b>Доходность к погашению (%)</b>", font=dict(family=FONT_FAMILY, size=14)),
+        title=dict(text="<b>Доходность, %</b>", font=dict(family=FONT_FAMILY, size=14)),
         tickfont=dict(family=FONT_FAMILY, size=12),
         ticksuffix="%",
         gridcolor="#eeeeee",
