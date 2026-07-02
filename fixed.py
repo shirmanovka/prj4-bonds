@@ -201,7 +201,6 @@ df_full = load_fixed()
 
 st.title("📊 Фиксированный купон — Карта доходностей")
 st.caption("Данные обновляются каждое утро")
-st.page_link("pages/1_floaters.py", label="Перейти к карте флоутеров", icon="📈")
 
 if df_full.empty:
     st.error("⚠️ Файл `data/bonds.csv` не найден. Запустите `python fetch.py`.")

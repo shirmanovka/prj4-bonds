@@ -111,7 +111,6 @@ df_full = load_floaters()
 
 st.title("📈 Плавающий купон — Карта спредов")
 st.caption("Данные обновляются каждое утро. Методика пересчёта спреда — по проекту Matchbox.")
-st.page_link("fixed.py", label="Перейти к карте фиксированного купона", icon="📊")
 
 if df_full.empty:
     st.error("⚠️ Файл `data/floaters.csv` не найден. Запустите `python fetch.py`.")
