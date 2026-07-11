@@ -2,12 +2,24 @@
 Скачивает данные облигаций с bondresearch.ru и сохраняет в data/bonds.csv и data/floaters.csv.
 Запускается GitHub Actions каждое утро или вручную.
 """
+import os
 import re
 import sys
 import requests
 import pandas as pd
 from datetime import date, datetime
 from pathlib import Path
+
+
+def _atomic_to_csv(df: pd.DataFrame, path: Path, **kwargs) -> None:
+    """
+    Пишет CSV во временный файл рядом с целевым и атомарно переименовывает
+    поверх него (os.replace) — старый файл никогда не окажется в битом
+    промежуточном состоянии, даже если запись прервётся (диск/права/сеть).
+    """
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    df.to_csv(tmp_path, **kwargs)
+    os.replace(tmp_path, path)
 
 HEADERS = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.bondresearch.ru/dashboard/"}
 
@@ -133,13 +145,23 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# Ниже этого числа строк результат считаем "подозрительным" (сайт мог
+# отдать пустой/урезанный ответ) и не перезаписываем им хорошие данные.
+MIN_EXPECTED_ROWS = 200
+
+
 def fetch_fixed_bonds(out_dir: Path, today: str) -> int:
     """Скачивает фиксированные облигации и сохраняет data/bonds.csv. Кидает исключение при ошибке."""
     rows = fetch_json("https://www.bondresearch.ru/boards/base_test.json")
     df_fixed = clean(parse_fixed(rows))
+    if len(df_fixed) < MIN_EXPECTED_ROWS:
+        raise RuntimeError(
+            f"Получено подозрительно мало строк ({len(df_fixed)}) — "
+            "похоже, bondresearch.ru отдал неполные данные. Файл не тронут."
+        )
     df_fixed["updated"] = today
     df_fixed["bond_type"] = "fixed"
-    df_fixed.to_csv(out_dir / "bonds.csv", index=False, encoding="utf-8-sig")
+    _atomic_to_csv(df_fixed, out_dir / "bonds.csv", index=False, encoding="utf-8-sig")
     return len(df_fixed)
 
 
@@ -147,16 +169,23 @@ def fetch_floaters(out_dir: Path, today: str) -> int:
     """Скачивает флоутеры и сохраняет data/floaters.csv. Кидает исключение при ошибке."""
     rows = fetch_json("https://www.bondresearch.ru/boards/pig_floaters_mk.json")
     df_fl = clean(parse_floaters(rows))
+    if len(df_fl) < MIN_EXPECTED_ROWS // 2:
+        raise RuntimeError(
+            f"Получено подозрительно мало строк ({len(df_fl)}) — "
+            "похоже, bondresearch.ru отдал неполные данные. Файл не тронут."
+        )
     df_fl["updated"] = today
     df_fl["bond_type"] = "floater"
-    df_fl.to_csv(out_dir / "floaters.csv", index=False, encoding="utf-8-sig")
+    _atomic_to_csv(df_fl, out_dir / "floaters.csv", index=False, encoding="utf-8-sig")
     return len(df_fl)
 
 
 def write_timestamp(out_dir: Path) -> str:
     """Фиксирует момент успешного обновления данных (для отображения в интерфейсе)."""
     ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    (out_dir / "last_update.txt").write_text(ts, encoding="utf-8")
+    tmp_path = out_dir / "last_update.txt.tmp"
+    tmp_path.write_text(ts, encoding="utf-8")
+    os.replace(tmp_path, out_dir / "last_update.txt")
     return ts
 
 
