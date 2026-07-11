@@ -8,10 +8,9 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
-from pathlib import Path
-from datetime import datetime
 
-import fetch as _fetch
+import common
+from common import DATA_DIR, RATING_ORDER, FONT_FAMILY, ISSUER_PREFIX
 
 # ════════════════════════════════════════════════════════════════
 # КОНФИГУРАЦИЯ СТРАНИЦЫ
@@ -22,29 +21,13 @@ st.set_page_config(
     layout="wide",
 )
 
-DATA_DIR = Path(__file__).parent / "data"
-
-# Порядок рейтингов от высшего к низшему (AAA → D)
-RATING_ORDER = [
-    "AAA", "AA+", "AA", "AA-",
-    "A+",  "A",   "A-",
-    "BBB+", "BBB", "BBB-",
-    "BB+",  "BB",  "BB-",
-    "B+",   "B",   "B-",
-    "CCC", "CC", "C", "D",
-]
-
 # Три типа эмитентов для фильтра
 ISSUER_TYPES = ["ОФЗ", "Корпоративные", "Субфедеральные"]
-
-# Префикс для опций-эмитентов в комбинированном фильтре "Тикер / Эмитент"
-ISSUER_PREFIX = "Эмитент: "
 
 # Цветовая схема (строго по ТЗ)
 COLOR_BONDS  = "#820411"   # Основные бумаги — тёмно-бордовый
 COLOR_CUSTOM = "#FFA500"   # Пользовательские точки — оранжевый
 COLOR_GCURVE = "#1565C0"   # G-кривая — синий
-FONT_FAMILY  = "Calibri"   # Шрифт всех текстов на графике
 
 
 # ════════════════════════════════════════════════════════════════
@@ -64,17 +47,6 @@ for _k, _v in _DEFAULTS.items():
 # ════════════════════════════════════════════════════════════════
 # ЗАГРУЗКА И ПОДГОТОВКА ДАННЫХ
 # ════════════════════════════════════════════════════════════════
-
-def _clean_rating(series: pd.Series) -> pd.Series:
-    """
-    Нормализует рейтинг: берёт первый компонент из составного вида
-    'AA (AA-)' или 'A-/BBB+', убирает пробелы.
-    Пример: 'AA (AA-)' → 'AA', 'A-/BBB+' → 'A-'
-    """
-    s = series.str.split(r"[/\s\(]").str[0].str.strip()
-    s = s.str.extract(r"^([A-D][A-Za-z+\-]*)")[0]
-    return s
-
 
 @st.cache_data(ttl=3600)
 def load_fixed() -> pd.DataFrame:
@@ -100,7 +72,7 @@ def load_fixed() -> pd.DataFrame:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
     # Нормализованный рейтинг и числовой порядок для сортировки
-    df["rating_clean"] = _clean_rating(df["rating"].fillna(""))
+    df["rating_clean"] = common.clean_rating(df["rating"].fillna(""))
     df["rating_order"] = df["rating_clean"].map(
         {r: i for i, r in enumerate(RATING_ORDER)}
     )
@@ -122,9 +94,7 @@ def load_fixed() -> pd.DataFrame:
     # Атомарные секторы: поле sector может содержать несколько значений через запятую
     # ("IT, МФО") — разбиваем на множество, чтобы фильтр по одному сектору находил
     # такие бумаги и не показывал склеенные строки как отдельные "секторы"
-    df["sector_set"] = df["sector"].fillna("").apply(
-        lambda s: frozenset(p.strip() for p in s.split(",") if p.strip())
-    )
+    df["sector_set"] = common.sector_set(df["sector"])
 
     # Оферта: дата оферты из option_date, иначе "—"
     def _offer(row: pd.Series) -> str:
@@ -144,30 +114,6 @@ def load_fixed() -> pd.DataFrame:
     )
 
     return df
-
-
-def _get_last_update_display(df: pd.DataFrame) -> str:
-    """
-    Определяет время последнего успешного обновления данных для отображения.
-    Приоритет: data/last_update.txt (точный timestamp) → mtime bonds.csv → колонка 'updated'.
-    """
-    ts_path = DATA_DIR / "last_update.txt"
-    if ts_path.exists():
-        try:
-            dt = datetime.fromisoformat(ts_path.read_text(encoding="utf-8").strip())
-            return dt.strftime("%d.%m.%Y %H:%M")
-        except ValueError:
-            pass
-
-    bonds_path = DATA_DIR / "bonds.csv"
-    if bonds_path.exists():
-        dt = datetime.fromtimestamp(bonds_path.stat().st_mtime)
-        return dt.strftime("%d.%m.%Y %H:%M")
-
-    if "updated" in df.columns and not df.empty:
-        return f"{df['updated'].iloc[0]} 00:00"
-
-    return "—"
 
 
 # ════════════════════════════════════════════════════════════════
@@ -253,29 +199,6 @@ def _assign_text_positions(x_arr: np.ndarray, y_arr: np.ndarray) -> list[str]:
 # Загрузка данных
 df_full = load_fixed()
 
-# ── Верхняя панель: принудительное обновление данных ─────────────
-_top_l, _top_r = st.columns([1, 4])
-with _top_l:
-    if st.button(
-        "🔄 Обновить данные",
-        use_container_width=True,
-        help="Принудительно загрузить свежие данные с bondresearch.ru",
-    ):
-        with st.spinner("Загружаю данные..."):
-            try:
-                _fetch.main()
-            except Exception as e:
-                st.error(f"Не удалось обновить данные: {e}")
-            else:
-                load_fixed.clear()
-                st.rerun()
-with _top_r:
-    st.markdown(
-        f"<div style='padding-top:0.6em'>Последнее обновление: "
-        f"<b>{_get_last_update_display(df_full)}</b></div>",
-        unsafe_allow_html=True,
-    )
-
 st.title("📊 Фиксированный купон — Карта доходностей")
 st.caption("Данные обновляются каждое утро")
 
@@ -294,6 +217,8 @@ df_ofz = df_full[df_full["issuer_type"] == "ОФЗ"].copy()
 # САЙДБАР: ФИЛЬТРЫ + НАСТРОЙКИ ГРАФИКА + КОНСТРУКТОР СДЕЛКИ
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
+    # ── Обновление данных ──────────────────────────────────────
+    common.render_refresh_button(df_full, [load_fixed])
     st.header("Фильтры")
     st.caption(f"Данные от **{updated}** | Всего: **{total_count}** выпусков")
     st.divider()
@@ -615,13 +540,13 @@ fig.update_layout(
         xanchor="center",
     ),
     xaxis=dict(
-        title=dict(text="<b>Дюрация (лет)</b>", font=dict(family=FONT_FAMILY, size=14)),
+        title=dict(text="<b>Дюрация, лет</b>", font=dict(family=FONT_FAMILY, size=14)),
         tickfont=dict(family=FONT_FAMILY, size=12),
         gridcolor="#eeeeee",
         zeroline=False,
     ),
     yaxis=dict(
-        title=dict(text="<b>Доходность к погашению (%)</b>", font=dict(family=FONT_FAMILY, size=14)),
+        title=dict(text="<b>Доходность, %</b>", font=dict(family=FONT_FAMILY, size=14)),
         tickfont=dict(family=FONT_FAMILY, size=12),
         ticksuffix="%",
         gridcolor="#eeeeee",
