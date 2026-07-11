@@ -1,5 +1,6 @@
-streamlit==1.59.1
-pandas==3.0.3
-plotly==6.9.0
+streamlit==1.38.0
+pandas==2.2.3
+plotly==5.24.1
 requests==2.34.2
-numpy==2.5.1
+numpy==1.26.4
+pyarrow==17.0.0
