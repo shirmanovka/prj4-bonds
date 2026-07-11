@@ -6,7 +6,7 @@ import re
 import sys
 import requests
 import pandas as pd
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 HEADERS = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.bondresearch.ru/dashboard/"}
@@ -133,61 +133,38 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def fetch_fixed_bonds(out_dir: Path, today: str) -> int:
-    """Скачивает фиксированные облигации и сохраняет data/bonds.csv. Кидает исключение при ошибке."""
-    rows = fetch_json("https://www.bondresearch.ru/boards/base_test.json")
-    df_fixed = clean(parse_fixed(rows))
-    df_fixed["updated"] = today
-    df_fixed["bond_type"] = "fixed"
-    df_fixed.to_csv(out_dir / "bonds.csv", index=False, encoding="utf-8-sig")
-    return len(df_fixed)
-
-
-def fetch_floaters(out_dir: Path, today: str) -> int:
-    """Скачивает флоутеры и сохраняет data/floaters.csv. Кидает исключение при ошибке."""
-    rows = fetch_json("https://www.bondresearch.ru/boards/pig_floaters_mk.json")
-    df_fl = clean(parse_floaters(rows))
-    df_fl["updated"] = today
-    df_fl["bond_type"] = "floater"
-    df_fl.to_csv(out_dir / "floaters.csv", index=False, encoding="utf-8-sig")
-    return len(df_fl)
-
-
-def write_timestamp(out_dir: Path) -> str:
-    """Фиксирует момент успешного обновления данных (для отображения в интерфейсе)."""
-    ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    (out_dir / "last_update.txt").write_text(ts, encoding="utf-8")
-    return ts
-
-
 def main():
-    """
-    Обновляет data/bonds.csv и data/floaters.csv.
-    Ошибка при загрузке фиксированных облигаций — критична (пробрасывается вызывающему).
-    Ошибка при загрузке флоутеров — не критична, только предупреждение.
-    """
     out_dir = Path(__file__).parent / "data"
     out_dir.mkdir(exist_ok=True)
     today = str(date.today())
 
+    # --- Фиксированные облигации ---
     print("Загружаю фиксированные облигации...")
-    n_fixed = fetch_fixed_bonds(out_dir, today)
-    print(f"  Сохранено: {n_fixed} строк → data/bonds.csv")
+    try:
+        rows = fetch_json("https://www.bondresearch.ru/boards/base_test.json")
+        df_fixed = clean(parse_fixed(rows))
+        df_fixed["updated"] = today
+        df_fixed["bond_type"] = "fixed"
+        df_fixed.to_csv(out_dir / "bonds.csv", index=False, encoding="utf-8-sig")
+        print(f"  Сохранено: {len(df_fixed)} строк → data/bonds.csv")
+    except Exception as e:
+        print(f"  ОШИБКА фиксированные: {e}", file=sys.stderr)
+        sys.exit(1)
 
+    # --- Флоутеры ---
     print("Загружаю флоутеры...")
     try:
-        n_fl = fetch_floaters(out_dir, today)
-        print(f"  Сохранено: {n_fl} строк → data/floaters.csv")
+        rows = fetch_json("https://www.bondresearch.ru/boards/pig_floaters_mk.json")
+        df_fl = clean(parse_floaters(rows))
+        df_fl["updated"] = today
+        df_fl["bond_type"] = "floater"
+        df_fl.to_csv(out_dir / "floaters.csv", index=False, encoding="utf-8-sig")
+        print(f"  Сохранено: {len(df_fl)} строк → data/floaters.csv")
     except Exception as e:
         print(f"  ПРЕДУПРЕЖДЕНИЕ флоутеры: {e}", file=sys.stderr)
 
-    write_timestamp(out_dir)
     print("Готово.")
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"ОШИБКА фиксированные: {e}", file=sys.stderr)
-        sys.exit(1)
+    main()
