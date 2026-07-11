@@ -4,4 +4,4 @@ plotly>=5.20
 requests>=2.31
 kaleido>=0.2.1
 numpy>=1.26
-pyarrow==17.0.0
+pyarrow==22.0.0
