@@ -9,6 +9,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 from pathlib import Path
+from datetime import datetime
+
+import fetch as _fetch
 
 # ════════════════════════════════════════════════════════════════
 # КОНФИГУРАЦИЯ СТРАНИЦЫ
@@ -33,6 +36,9 @@ RATING_ORDER = [
 
 # Три типа эмитентов для фильтра
 ISSUER_TYPES = ["ОФЗ", "Корпоративные", "Субфедеральные"]
+
+# Префикс для опций-эмитентов в комбинированном фильтре "Тикер / Эмитент"
+ISSUER_PREFIX = "Эмитент: "
 
 # Цветовая схема (строго по ТЗ)
 COLOR_BONDS  = "#820411"   # Основные бумаги — тёмно-бордовый
@@ -84,7 +90,7 @@ def load_fixed() -> pd.DataFrame:
 
     # Числовые колонки
     for col in ["volume", "price", "g_spread", "yield_pct", "current_yield",
-                "duration", "spread", "coupon", "face_value"]:
+                "duration", "spread", "coupon", "face_value", "coupon_freq"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -113,6 +119,13 @@ def load_fixed() -> pd.DataFrame:
 
     df["issuer_type"] = df.apply(_classify, axis=1)
 
+    # Атомарные секторы: поле sector может содержать несколько значений через запятую
+    # ("IT, МФО") — разбиваем на множество, чтобы фильтр по одному сектору находил
+    # такие бумаги и не показывал склеенные строки как отдельные "секторы"
+    df["sector_set"] = df["sector"].fillna("").apply(
+        lambda s: frozenset(p.strip() for p in s.split(",") if p.strip())
+    )
+
     # Оферта: дата оферты из option_date, иначе "—"
     def _offer(row: pd.Series) -> str:
         opt_type = str(row.get("option_type") or "")
@@ -131,6 +144,30 @@ def load_fixed() -> pd.DataFrame:
     )
 
     return df
+
+
+def _get_last_update_display(df: pd.DataFrame) -> str:
+    """
+    Определяет время последнего успешного обновления данных для отображения.
+    Приоритет: data/last_update.txt (точный timestamp) → mtime bonds.csv → колонка 'updated'.
+    """
+    ts_path = DATA_DIR / "last_update.txt"
+    if ts_path.exists():
+        try:
+            dt = datetime.fromisoformat(ts_path.read_text(encoding="utf-8").strip())
+            return dt.strftime("%d.%m.%Y %H:%M")
+        except ValueError:
+            pass
+
+    bonds_path = DATA_DIR / "bonds.csv"
+    if bonds_path.exists():
+        dt = datetime.fromtimestamp(bonds_path.stat().st_mtime)
+        return dt.strftime("%d.%m.%Y %H:%M")
+
+    if "updated" in df.columns and not df.empty:
+        return f"{df['updated'].iloc[0]} 00:00"
+
+    return "—"
 
 
 # ════════════════════════════════════════════════════════════════
@@ -213,11 +250,35 @@ def _assign_text_positions(x_arr: np.ndarray, y_arr: np.ndarray) -> list[str]:
 # ════════════════════════════════════════════════════════════════
 # ════════════════════════════════════════════════════════════════
 
+# Загрузка данных
+df_full = load_fixed()
+
+# ── Верхняя панель: принудительное обновление данных ─────────────
+_top_l, _top_r = st.columns([1, 4])
+with _top_l:
+    if st.button(
+        "🔄 Обновить данные",
+        use_container_width=True,
+        help="Принудительно загрузить свежие данные с bondresearch.ru",
+    ):
+        with st.spinner("Загружаю данные..."):
+            try:
+                _fetch.main()
+            except Exception as e:
+                st.error(f"Не удалось обновить данные: {e}")
+            else:
+                load_fixed.clear()
+                st.rerun()
+with _top_r:
+    st.markdown(
+        f"<div style='padding-top:0.6em'>Последнее обновление: "
+        f"<b>{_get_last_update_display(df_full)}</b></div>",
+        unsafe_allow_html=True,
+    )
+
 st.title("📊 Фиксированный купон — Карта доходностей")
 st.caption("Данные обновляются каждое утро")
 
-# Загрузка данных
-df_full = load_fixed()
 if df_full.empty:
     st.error("⚠️ Файл `data/bonds.csv` не найден. Запустите `python fetch.py`.")
     st.stop()
@@ -264,8 +325,8 @@ with st.sidebar:
         default=["Корпоративные"],
     )
 
-    # ── Сектор ──────────────────────────────────────────────────
-    _avail_sectors = sorted(df_full["sector"].dropna().unique().tolist())
+    # ── Сектор (атомарные значения — без склеенных дублей) ──────
+    _avail_sectors = sorted({s for _set in df_full["sector_set"] for s in _set})
     sel_sectors: list[str] = st.multiselect(
         "Сектор",
         _avail_sectors,
@@ -286,13 +347,21 @@ with st.sidebar:
         help="Диапазон дюрации для отображения",
     )
 
-    # ── ISIN / Тикер (опционально) ──────────────────────────────
+    # ── Тикер / Эмитент (опционально) ────────────────────────────
+    # Объединённый список: тикеры + эмитенты (с префиксом). Выбор эмитента
+    # подгружает сразу ВСЕ его выпуски, а не один конкретный тикер.
     _all_tickers = sorted(df_full["ticker"].dropna().unique().tolist())
+    _all_issuers = sorted(df_full["issuer"].dropna().unique().tolist())
+    _ticker_issuer_options = _all_tickers + [ISSUER_PREFIX + i for i in _all_issuers]
     sel_tickers: list[str] = st.multiselect(
-        "ISIN / Тикер (опционально)",
-        _all_tickers,
+        "Тикер / Эмитент (опционально)",
+        _ticker_issuer_options,
         default=[],
-        help="Оставьте пустым для отображения всех",
+        help=(
+            "Введите тикер или название эмитента. Выбор эмитента "
+            "(«Эмитент: …») подгружает все его выпуски одним кликом. "
+            "Оставьте пустым для отображения всех."
+        ),
     )
 
     st.divider()
@@ -385,12 +454,20 @@ if sel_issuer_types:
     mask &= df_full["issuer_type"].isin(sel_issuer_types)
 
 if sel_sectors:
-    mask &= df_full["sector"].isin(sel_sectors)
+    _sel_sector_set = set(sel_sectors)
+    mask &= df_full["sector_set"].apply(lambda s: bool(s & _sel_sector_set))
 
 mask &= df_full["duration"].between(sel_dur[0], sel_dur[1], inclusive="both")
 
 if sel_tickers:
-    mask &= df_full["ticker"].isin(sel_tickers)
+    _sel_issuers = {t[len(ISSUER_PREFIX):] for t in sel_tickers if t.startswith(ISSUER_PREFIX)}
+    _sel_tickers_only = {t for t in sel_tickers if not t.startswith(ISSUER_PREFIX)}
+    _ticker_mask = pd.Series(False, index=df_full.index)
+    if _sel_tickers_only:
+        _ticker_mask |= df_full["ticker"].isin(_sel_tickers_only)
+    if _sel_issuers:
+        _ticker_mask |= df_full["issuer"].isin(_sel_issuers)
+    mask &= _ticker_mask
 
 # Убираем строки без координат графика
 fdf = df_full[mask].dropna(subset=["duration", "yield_pct"]).copy()
@@ -456,7 +533,7 @@ _tp = _assign_text_positions(
 _labels: list[str] | None
 if show_labels:
     _labels = fdf.apply(
-        lambda r: f"{r['ticker']}, {r['rating_clean']}",
+        lambda r: f"{r['ticker']}, {r['rating'] if pd.notna(r['rating']) else r['rating_clean']}",
         axis=1,
     ).tolist()
     _mode = "markers+text"
@@ -510,7 +587,7 @@ if st.session_state.custom_points:
         x=_cp["duration"],
         y=_cp["yield_pct"],
         mode="markers+text",
-        name="Мои точки",
+        name="Новый выпуск",
         text=_cp["name"],
         textposition="top center",
         textfont=dict(family=FONT_FAMILY, size=13, color=COLOR_CUSTOM),
@@ -538,13 +615,13 @@ fig.update_layout(
         xanchor="center",
     ),
     xaxis=dict(
-        title=dict(text="Дюрация (лет)", font=dict(family=FONT_FAMILY, size=14)),
+        title=dict(text="<b>Дюрация (лет)</b>", font=dict(family=FONT_FAMILY, size=14)),
         tickfont=dict(family=FONT_FAMILY, size=12),
         gridcolor="#eeeeee",
         zeroline=False,
     ),
     yaxis=dict(
-        title=dict(text="Доходность к погашению (%)", font=dict(family=FONT_FAMILY, size=14)),
+        title=dict(text="<b>Доходность к погашению (%)</b>", font=dict(family=FONT_FAMILY, size=14)),
         tickfont=dict(family=FONT_FAMILY, size=12),
         ticksuffix="%",
         gridcolor="#eeeeee",
@@ -606,6 +683,7 @@ _TABLE_COLS: dict[str, str] = {
     "current_yield": "Тек. дох-ть, %",
     "duration":      "Дюрация",
     "coupon":        "Купон, %",
+    "coupon_freq":   "Выплаты/год",
     "has_option":    "Оферта",
     "offer_type":    "Тип оферты",
     "maturity":      "Погашение",
@@ -646,9 +724,11 @@ _edited = st.data_editor(
         "Тек. дох-ть, %": st.column_config.NumberColumn(format="%.2f"),
         "Дюрация":        st.column_config.NumberColumn(format="%.2f"),
         "Купон, %":       st.column_config.NumberColumn(format="%.2f"),
+        "Выплаты/год":    st.column_config.NumberColumn(format="%d"),
         "G-спред, бп":    st.column_config.NumberColumn(format="%.0f"),
         "Цена, пп":       st.column_config.NumberColumn(format="%.2f"),
         "Объем, млн":     st.column_config.NumberColumn(format="%.0f"),
+        "Рейтинг":        st.column_config.TextColumn(width="medium"),
     },
     # Все колонки только для чтения, кроме чекбокса удаления
     disabled=[c for c in _tbl.columns if c != "🗑"],
